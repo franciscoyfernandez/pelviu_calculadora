@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pelviU | Calculadora de Recuperación</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FAFAFA;
+        }
+
+        .text-brand {
+            color: #EE8866;
+        }
+
+        .bg-brand {
+            background-color: #EE8866;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #EE8866;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom": "https://esm.sh/react-dom@^19.2.3",
+        "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
+        "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
+        "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+      }
+    }
+    </script>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import ReactDOM from 'react-dom/client';
+        import { motion, AnimatePresence } from 'framer-motion';
+
+        // --- CONSTANTS ---
+        const PRICING = {
+            PREVENTION: { name: "Plan Prevención", sessions: 1, duration: "1 Día", price: 65, description: "Mantenimiento preventivo para una salud pélvica óptima.", idealFor: "Usuarios con suelo pélvico saludable que buscan fortalecer." },
+            LEVEL_1: { name: "Nivel 1 (Leve)", sessions: 8, duration: "1 Mes", price: 390, description: "Ciclo inicial de tonificación con tecnología HIFEM.", idealFor: "Pérdidas ocasionales y debilidad muscular inicial." },
+            LEVEL_2: { name: "Nivel 2 (Moderado)", sessions: 20, duration: "3 Meses", price: 800, description: "Protocolo intensivo de recuperación funcional profunda.", idealFor: "Pérdidas recurrentes que afectan la calidad de vida." },
+            LEVEL_3: { name: "Nivel 3 (Complejo)", sessions: 30, duration: "5 Meses", price: 1110, description: "Tratamiento avanzado de reeducación neuromuscular completa.", idealFor: "Casos severos con alta afectación de la musculatura pélvica." },
+            MEMBERSHIP: 79
+        };
+
+        const COMMON_BASE = [
+            { id: 1, text: "¿Con qué frecuencia experimentas pérdidas de orina?", description: "La frecuencia es el primer indicador de la debilidad del soporte pélvico.", options: [{ label: "Nunca", score: 0 }, { label: "Una vez a la semana o menos", score: 5 }, { label: "Varias veces por semana", score: 10 }, { label: "Una vez al día", score: 15 }, { label: "Continuamente", score: 25 }] },
+            { id: 2, text: "¿Qué cantidad de orina sueles perder?", description: "Evaluamos el volumen para determinar el grado de insuficiencia muscular.", options: [{ label: "Nada", score: 0 }, { label: "Gotas o cantidad muy pequeña", score: 10 }, { label: "Cantidad moderada", score: 20 }, { label: "Cantidad severa", score: 30 }] }
+        ];
+
+        const WOMEN_QUESTIONS = [
+            ...COMMON_BASE,
+            { id: 3, text: "¿Sientes pesadez o presión en la zona vaginal (sensación de bulto)?", description: "Este es un síntoma clave de prolapso de órganos pélvicos.", options: [{ label: "Nunca", score: 0 }, { label: "Ocasionalmente al final del día", score: 10 }, { label: "Frecuentemente tras esfuerzos", score: 20 }, { label: "De forma constante", score: 30 }] },
+            { id: 4, text: "¿Pierdes orina al toser, estornudar, reír o saltar?", description: "Incontinencia de esfuerzo, común tras partos o durante la menopausia.", options: [{ label: "Nunca", score: 0 }, { label: "A veces", score: 10 }, { label: "Casi siempre que ocurre el esfuerzo", score: 20 }] },
+            { id: 5, text: "¿Has notado una disminución en la sensibilidad o satisfacción sexual?", description: "La laxitud vaginal afecta directamente a la calidad de las relaciones íntimas.", options: [{ label: "No, todo normal", score: 0 }, { label: "He notado un cambio leve", score: 10 }, { label: "Ha afectado significativamente mi bienestar", score: 20 }] }
+        ];
+
+        const MEN_QUESTIONS = [
+            ...COMMON_BASE,
+            { id: 103, text: "¿Sufres de goteo post-miccional (gotas al terminar de orinar)?", description: "Falla en el músculo bulbocavernoso, muy común en la salud pélvica masculina.", options: [{ label: "Nunca", score: 0 }, { label: "A veces", score: 10 }, { label: "Siempre me ocurre", score: 20 }] },
+            { id: 104, text: "¿Has pasado por una cirugía de próstata o tienes problemas de flujo débil?", description: "La recuperación funcional post-quirúrgica es crítica para el control.", options: [{ label: "No / Flujo fuerte", score: 0 }, { label: "Cirugía previa / Flujo algo débil", score: 15 }, { label: "Post-operatorio reciente / Flujo muy débil", score: 25 }] },
+            { id: 105, text: "¿Sientes que tus erecciones han perdido firmeza o duración?", description: "Los músculos isquiocavernosos son los responsables mecánicos de la erección.", options: [{ label: "Todo normal", score: 0 }, { label: "Siento una pérdida de potencia", score: 15 }, { label: "Afectación severa del rendimiento", score: 25 }] }
+        ];
+
+        // --- HELPER ---
+        const calculateResult = (answers, gender) => {
+            const relevantQuestions = gender === 'mujer' ? WOMEN_QUESTIONS : MEN_QUESTIONS;
+            const maxPossibleRawScore = relevantQuestions.reduce((acc, q) => acc + Math.max(...q.options.map(o => o.score)), 0);
+            const rawScore = Object.values(answers).reduce((acc, val) => acc + val, 0);
+            const normalizedScore = (rawScore / maxPossibleRawScore) * 100;
+
+            let recommendation = 'Prevention';
+            let treatment = PRICING.PREVENTION;
+
+            if (normalizedScore >= 25 && normalizedScore < 45) { recommendation = 'Level 1'; treatment = PRICING.LEVEL_1; }
+            else if (normalizedScore >= 45 && normalizedScore < 70) { recommendation = 'Level 2'; treatment = PRICING.LEVEL_2; }
+            else if (normalizedScore >= 70) { recommendation = 'Level 3'; treatment = PRICING.LEVEL_3; }
+
+            return { score: Math.round(normalizedScore), recommendation, treatment, gender };
+        };
+
+        // --- NEW DATA & ICONS ---
+
+        const BENEFITS_DATA = {
+            mujer: [
+                { id: 'incontinence', title: 'Incontinencia Urinaria', desc: 'Avalado para curar o mejorar drásticamente la incontinencia por esfuerzo y urgencia. Eficacia clínica demostrada en el 95% de los casos.', icon: 'drop' },
+                { id: 'postpartum', title: 'Recuperación Post-Parto', desc: 'Restaura la elasticidad vaginal y fortalece el periné tras el trauma del parto, previniendo secuelas a largo plazo.', icon: 'baby' },
+                { id: 'diastasis', title: 'Diástasis Abdominal', desc: 'Fortalece el core profundo para favorecer el cierre de la separación de los rectos abdominales y recuperar la silueta.', icon: 'muscle' },
+                { id: 'sexual', title: 'Salud Sexual', desc: 'El aumento del tono muscular y la irrigación sanguínea mejora significativamente la sensibilidad y la respuesta orgásmica.', icon: 'heart' },
+                { id: 'prolapse', title: 'Prevención de Prolapsos', desc: 'Refuerza las estructuras de sostén de vejiga y útero, evitando descensos orgánicos y la necesidad de cirugía futura.', icon: 'shield' },
+                { id: 'back', title: 'Estabilidad y Espalda', desc: 'Un suelo pélvico fuerte es el pilar de tu postura, reduciendo el dolor lumbar crónico por debilidad del core.', icon: 'spine' }
+            ],
+            hombre: [
+                { id: 'incontinence_m', title: 'Goteo Post-Miccional', desc: 'Elimina el molesto goteo al terminar de orinar fortaleciendo el músculo bulbocavernoso, responsable del vaciado completo.', icon: 'drop' },
+                { id: 'surgery', title: 'Recuperación Post-Cirugía', desc: 'Acelera la recuperación del control y la función tras cirugías de próstata, reduciendo el tiempo de rehabilitación.', icon: 'medical' },
+                { id: 'core_m', title: 'Potencia Abdominal', desc: 'Fortalece el core profundo para mejorar el rendimiento deportivo y prevenir hernias abdominales por esfuerzo.', icon: 'muscle' },
+                { id: 'sexual_m', title: 'Potencia Sexual', desc: 'Mejora la calidad y duración de las erecciones al fortalecer los músculos isquiocavernosos que retienen la sangre.', icon: 'fire' },
+                { id: 'prostate', title: 'Salud Prostática', desc: 'Mejora la irrigación sanguínea en la zona pélvica, contribuyendo a una mejor salud general de la próstata y tejidos circundantes.', icon: 'shield' },
+                { id: 'posture', title: 'Postura y Rendimiento', desc: 'Estabiliza la pelvis y columna lumbar, fundamental para deportes de impacto y prevención de dolores de espalda.', icon: 'spine' }
+            ]
+        };
+
+        const Icon = ({ name, className }) => {
+            const icons = {
+                drop: <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z" />,
+                baby: <path d="M15.5 13a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z M9 16.5a6.5 6.5 0 0 0 13 0M5 13a4.5 4.5 0 0 0 9 0" />, // Simplified abstract representation 
+                muscle: <path d="M21 11c0 5.5-4.5 9-9 9s-9-3.5-9-9 3-6 7.5-6 8 2.5 8 6z M12 5v16" />, // Core symbolism
+                heart: <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />,
+                shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+                spine: <path d="M12 3v18 M8 6h8 M8 10h8 M8 14h8 M8 18h8" />,
+                medical: <path d="M12 2v20 M2 12h20" />, // Cross
+                fire: <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+            };
+
+            // Default fallbacks for custom icons using generic shapes if path not perfect, but these are illustrative
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name] || <circle cx="12" cy="12" r="10" />}
+                </svg>
+            );
+        };
+
+        const BenefitCard = ({ title, desc, icon }) => (
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start gap-4">
+                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
+                    {/* Using color mapping based on index or type would be better, but simple blue/brand is fine */}
+                    <Icon name={icon} className="w-5 h-5 text-[#EE8866]" />
+                </div>
+                <div>
+                    <h3 className="font-bold text-gray-900 mb-2">{title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                </div>
+            </div>
+        );
+
+        // --- DATABASE SERVICE ---
+        const DB = {
+            KEY: 'pelviu_leads_db',
+
+            getAll: () => {
+                try {
+                    return JSON.parse(localStorage.getItem(DB.KEY) || '[]');
+                } catch (e) { return []; }
+            },
+
+            save: (data) => {
+                const db = DB.getAll();
+                db.push(data);
+                localStorage.setItem(DB.KEY, JSON.stringify(db));
+            },
+
+            update: (id, updates) => {
+                const db = DB.getAll();
+                const index = db.findIndex(item => item.id === id);
+                if (index !== -1) {
+                    db[index] = { ...db[index], ...updates };
+                    localStorage.setItem(DB.KEY, JSON.stringify(db));
+                    return true;
+                }
+                return false;
+            },
+
+            createAssessment: (gender, answers, result, contact) => {
+                const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+                const record = {
+                    id,
+                    timestamp: new Date().toISOString(),
+                    gender,
+                    answers,
+                    score: result.score,
+                    recommendation: result.recommendation,
+                    treatment: result.treatment.name,
+                    contact: contact || { name: '', age: '', email: '', phone: '' }
+                };
+                DB.save(record);
+                return id;
+            },
+
+            exportCSV: () => {
+                const db = DB.getAll();
+                if (db.length === 0) { alert("No hay datos para exportar."); return; }
+
+                // Headers
+                const headers = ["ID", "Fecha", "Género", "Edad", "Puntuación", "Recomendación", "Tratamiento", "Nombre", "Email", "Teléfono", "Respuestas (JSON)"];
+
+                // Rows
+                const rows = db.map(row => [
+                    row.id,
+                    new Date(row.timestamp).toLocaleString(),
+                    row.gender,
+                    row.contact?.age || '', // Added Age
+                    row.score,
+                    row.recommendation,
+                    row.treatment,
+                    row.contact?.name || '',
+                    row.contact?.email || '',
+                    row.contact?.phone || '',
+                    JSON.stringify(row.answers).replace(/"/g, '""')
+                ]);
+
+                const csvContent = [
+                    headers.join(','),
+                    ...rows.map(r => r.map(c => `"${c}"`).join(','))
+                ].join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `pelviu_leads_${new Date().toISOString().slice(0, 10)}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+
+            clear: () => {
+                localStorage.removeItem(DB.KEY);
+            }
+        };
+
+        // --- COMPONENTS ---
+
+        const LeadCapture = ({ onCapture }) => {
+            const [formData, setFormData] = useState({ name: '', age: '', email: '', phone: '' });
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setIsSubmitting(true);
+                // Simulate delay/network
+                await new Promise(r => setTimeout(r, 600));
+                onCapture(formData);
+                setIsSubmitting(false);
+            };
+
+            return (
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="min-h-[70vh] flex flex-col justify-center items-center px-6">
+                    <div className="bg-white p-8 md:p-10 rounded-[2rem] shadow-xl border border-gray-100 max-w-lg w-full text-center space-y-6">
+                        <div className="w-16 h-16 bg-[#EE8866]/10 rounded-full flex items-center justify-center mx-auto text-3xl">
+                            📋
+                        </div>
+                        <h2 className="text-3xl font-bold text-gray-900">Tu Informe está listo</h2>
+                        <p className="text-gray-500">
+                            Por favor, completa tus datos para que podamos generar y vincular tu número de expediente único a tu diagnóstico personalizado.
+                        </p>
+
+                        <form onSubmit={handleSubmit} className="space-y-4 text-left">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Nombre Completo</label>
+                                <input required type="text" className="w-full p-4 rounded-xl border border-gray-200 focus:border-[#EE8866] outline-none transition-colors bg-gray-50 focus:bg-white"
+                                    value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Tu nombre" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Edad</label>
+                                <input required type="number" min="18" max="100" className="w-full p-4 rounded-xl border border-gray-200 focus:border-[#EE8866] outline-none transition-colors bg-gray-50 focus:bg-white"
+                                    value={formData.age} onChange={e => setFormData({ ...formData, age: e.target.value })} placeholder="Ej. 35" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Email</label>
+                                <input required type="email" className="w-full p-4 rounded-xl border border-gray-200 focus:border-[#EE8866] outline-none transition-colors bg-gray-50 focus:bg-white"
+                                    value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="tucorreo@ejemplo.com" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">WhatsApp</label>
+                                <input required type="tel" name="phone" className="w-full p-4 rounded-xl border border-gray-200 focus:border-[#EE8866] outline-none transition-colors bg-gray-50 focus:bg-white"
+                                    value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="+34 600 000 000" />
+                            </div>
+
+                            <button disabled={isSubmitting} type="submit" className="w-full bg-[#EE8866] text-white py-4 rounded-xl font-bold text-lg hover:bg-[#E57A57] transition-all shadow-lg shadow-[#EE8866]/20 mt-4">
+                                {isSubmitting ? 'Procesando...' : 'Ver Mis Resultados'}
+                            </button>
+                        </form>
+                        <p className="text-xs text-gray-400">Tus datos son 100% confidenciales y se usan solo para enviarte tu informe.</p>
+                    </div>
+                </motion.div>
+            );
+        };
+
+        // --- COMPONENTS ---
+
+        const Header = ({ onOpenHowItWorks, onGoHome }) => (
+            <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+                <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+                    <button onClick={onGoHome} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <div className="w-8 h-8 rounded-full bg-[#EE8866] flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">P</span>
+                        </div>
+                        <span className="text-xl font-bold tracking-tight text-gray-800">pelvi<span className="text-[#EE8866]">U</span></span>
+                    </button>
+                    <button onClick={onOpenHowItWorks} className="text-gray-600 hover:text-[#EE8866] transition-colors font-semibold text-sm">
+                        ¿Cómo funciona?
+                    </button>
+                </div>
+            </header>
+        );
+
+        const ProgressBar = ({ current, total }) => (
+            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-[#EE8866] transition-all duration-500 ease-out" style={{ width: `${(current / total) * 100}%` }} />
+            </div>
+        );
+
+        const BookingModal = ({ isOpen, onClose, treatment, assessmentId }) => {
+            const [step, setStep] = useState('form');
+            const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+
+                // 1. Update Local DB
+                if (assessmentId) {
+                    DB.update(assessmentId, { contact: formData });
+                }
+
+                // 2. Send to Google Sheets (Fire and forget)
+                const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby57pYlKGRxTQh1NAV-SKrAynHtjbtvk4QoERzFQ09ewAxktp_07NKmn2nNd-548NWW/exec";
+
+                fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...formData,
+                        assessmentId,
+                        treatment: treatment.name
+                    })
+                }).catch(err => console.error("PS Sync Error:", err));
+
+                setStep('success');
+            };
+
+            const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onClose} className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
+                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl p-8 md:p-12 overflow-hidden">
+                        {step === 'form' ? (
+                            <div>
+                                <h2 className="text-3xl font-extrabold mb-4">Reserva tu sesión</h2>
+                                <p className="text-gray-500 mb-8">Protocolo de {treatment.name}</p>
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <input required name="name" value={formData.name} onChange={handleChange} placeholder="Nombre Completo" className="w-full px-6 py-4 rounded-2xl border-2 border-gray-100 outline-none focus:border-[#EE8866]" />
+                                    <input required name="email" value={formData.email} onChange={handleChange} type="email" placeholder="Email" className="w-full px-6 py-4 rounded-2xl border-2 border-gray-100 outline-none focus:border-[#EE8866]" />
+                                    <input required name="phone" value={formData.phone} onChange={handleChange} type="tel" placeholder="Teléfono" className="w-full px-6 py-4 rounded-2xl border-2 border-gray-100 outline-none focus:border-[#EE8866]" />
+                                    <button type="submit" className="w-full bg-[#EE8866] text-white py-5 rounded-2xl font-bold shadow-xl shadow-[#EE8866]/20">Confirmar Reserva</button>
+                                </form>
+                            </div>
+                        ) : (
+
+                            <div className="text-center py-8">
+                                <div className="text-5xl mb-4">✅</div>
+                                <h2 className="text-3xl font-extrabold mb-4">¡Solicitud Recibida!</h2>
+                                <p className="text-gray-500 mb-8">Te contactaremos en menos de 24h.</p>
+                                <button onClick={onClose} className="w-full bg-gray-900 text-white py-5 rounded-2xl font-bold">Cerrar</button>
+                            </div>
+                        )}
+                    </motion.div>
+                </div>
+            );
+        };
+
+        const Assessment = ({ onComplete }) => {
+            const [gender, setGender] = useState(null);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [answers, setAnswers] = useState({});
+            const questions = gender === 'mujer' ? WOMEN_QUESTIONS : MEN_QUESTIONS;
+            const currentQuestion = questions[currentIndex];
+
+            if (!gender) return (
+                <div className="min-h-[80vh] flex flex-col justify-center items-center px-4 py-20 text-center space-y-12">
+                    <h2 className="text-4xl md:text-5xl font-black">Empecemos tu evaluación</h2>
+                    <div className="grid md:grid-cols-2 gap-6 w-full max-w-2xl">
+                        <button onClick={() => setGender('mujer')} className="bg-white p-10 rounded-[2.5rem] border-2 border-gray-100 hover:border-[#EE8866] transition-all text-2xl font-bold shadow-sm">♀ Soy Mujer</button>
+                        <button onClick={() => setGender('hombre')} className="bg-white p-10 rounded-[2.5rem] border-2 border-gray-100 hover:border-[#EE8866] transition-all text-2xl font-bold shadow-sm">♂ Soy Hombre</button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-[80vh] flex flex-col justify-center items-center px-4 py-20">
+                    <div className="w-full max-w-2xl space-y-12">
+                        <ProgressBar current={currentIndex + 1} total={questions.length} />
+                        <h2 className="text-3xl md:text-4xl font-bold">{currentQuestion.text}</h2>
+                        <div className="grid gap-4">
+                            {currentQuestion.options.map((opt, i) => (
+                                <button key={i} onClick={() => {
+                                    const nextAnswers = { ...answers, [currentQuestion.id]: opt.score };
+                                    setAnswers(nextAnswers);
+                                    if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1);
+                                    else onComplete(nextAnswers, gender);
+                                }} className="w-full text-left p-6 rounded-2xl border-2 border-gray-100 hover:border-[#EE8866]/30 hover:bg-gray-50 text-lg font-medium">
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Results = ({ result, assessmentId, onRestart, initialContact }) => {
+            const [isBookingOpen, setIsBookingOpen] = useState(false);
+            const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+            const contentRef = useRef(null);
+            const { score, recommendation, treatment } = result;
+
+            const handleDownloadPDF = () => {
+                setIsGeneratingPdf(true);
+                const element = contentRef.current;
+
+                // 1. Prepare for Print: Hide Buttons
+                const buttons = element.querySelectorAll('button');
+                buttons.forEach(b => b.style.display = 'none');
+
+                // Add seal visual
+                const seal = document.createElement('div');
+                seal.innerHTML = `
+                    <div style="position: absolute; top: 20px; right: 20px; width: 120px; height: 120px; border: 4px solid #D97706; border-radius: 50%; display: flex; align-items: center; justify-content: center; transform: rotate(-15deg); opacity: 0.9; z-index: 9999;">
+                        <div style="text-align: center; color: #D97706; font-family: sans-serif;">
+                            <div style="font-size: 8px; font-weight: bold; letter-spacing: 2px;">CERTIFICADO</div>
+                            <div style="font-size: 16px; font-weight: 900; margin: 2px 0;">PELVIU</div>
+                            <div style="font-size: 6px; font-weight: bold; letter-spacing: 1px;">CLINICALLY APPROVED</div>
+                            <div style="font-size: 12px; margin-top: 2px;">★ ★ ★</div>
+                        </div>
+                    </div>
+                `;
+                element.style.position = 'relative';
+                // Adjust scale for single page fit
+                element.style.transform = 'scale(0.85)';
+                element.style.transformOrigin = 'top center';
+                element.appendChild(seal);
+
+                const opt = {
+                    margin: [10, 10], // Reduced margins
+                    filename: 'Informe_Recuperacion_PelviU.pdf',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak: { mode: 'avoid-all' } // Avoid breaking
+                };
+
+                html2pdf().set(opt).from(element).save().then(() => {
+                    // Cleanup: Restore view
+                    element.removeChild(seal);
+                    buttons.forEach(b => b.style.display = '');
+                    element.style.transform = '';
+                    element.style.transformOrigin = '';
+                    setIsGeneratingPdf(false);
+                });
+            };
+
+            // Simulated AI Analysis Text (Static for preview)
+            const expertAnalysis = `Obtener un ${score}% en tu evaluación indica una desconexión neuromuscular significativa. El ${treatment.name} con tecnología HIFEM es el primer paso crucial; estas sesiones generan miles de contracciones supramaximales que reprograman la respuesta motora de tu suelo pélvico, reactivando fibras musculares inactivas. Es el cimiento necesario para recuperar la funcionalidad. No obstante, la musculatura pélvica tiende a la atrofia si el estímulo cesa. Por ello, la membresía de mantenimiento con dos sesiones mensuales es fundamental para consolidar los avances y evitar retrocesos. Este refuerzo periódico garantiza que el tono muscular se mantenga estable, transformando una mejora puntual en una salud pélvica duradera y resistente. Estamos comprometidos con tu bienestar a largo plazo.`;
+
+            return (
+                <motion.div ref={contentRef} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto px-6 py-24 space-y-8">
+                    <div className="text-center mb-12 space-y-4">
+                        <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900">
+                            Tu Diagnóstico de <span className="text-[#EE8866]">Recuperación</span>
+                        </h1>
+                        <p className="text-xl text-gray-500 max-w-2xl mx-auto">
+                            Basado en tus respuestas, hemos diseñado un protocolo específico para restaurar la funcionalidad de tu suelo pélvico.
+                        </p>
+                    </div>
+
+                    <div className="grid md:grid-cols-3 gap-8 items-stretch">
+                        <div className="md:col-span-1 bg-white p-8 rounded-[2rem] border border-gray-100 shadow-xl flex flex-col justify-center items-center space-y-6">
+                            <div className="text-center">
+                                <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Índice de Afectación</span>
+                                <div className="mt-4 flex items-baseline justify-center gap-1">
+                                    <span className="text-7xl font-black text-[#EE8866]">{score}</span>
+                                    <span className="text-2xl font-bold text-gray-300">%</span>
+                                </div>
+                            </div>
+                            <div className="space-y-2 text-center">
+                                <h3 className="text-lg font-bold text-gray-800 uppercase tracking-wide">{recommendation}</h3>
+                                <p className="text-sm text-gray-500 leading-relaxed max-w-[200px]">{treatment.idealFor}</p>
+                            </div>
+                            <button onClick={onRestart} className="text-xs font-bold text-gray-400 hover:text-[#EE8866] uppercase tracking-widest border-t border-gray-50 pt-4 w-full">Repetir Evaluación</button>
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <div className="bg-[#EE8866] text-white p-10 rounded-[2rem] shadow-2xl relative overflow-hidden h-full flex flex-col justify-between">
+                                <div className="space-y-6 relative z-10">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                                        <div>
+                                            <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-bold uppercase tracking-widest">Tratamiento Recomendado</span>
+                                            <h2 className="text-3xl font-bold mt-4">{treatment.name}</h2>
+                                        </div>
+                                        <div className="sm:text-right">
+                                            <span className="text-4xl font-black">{treatment.price}€</span>
+                                            <p className="text-sm text-white/80 mt-1">Precio Total</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-white text-[#EE8866] p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-[#EE8866]/70">Sesiones Totales</p>
+                                            <p className="text-2xl font-bold">{treatment.sessions}</p>
+                                        </div>
+                                        <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-white/70">Duración Programa</p>
+                                            <p className="text-2xl font-bold">{treatment.duration}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-2">
+                                        <p className="text-sm font-medium text-white/90">
+                                            <span className="font-bold">Protocolo:</span> Sesiones de 25 minutos, 2 días a la semana para garantizar la reeducación neuromuscular óptima.
+                                        </p>
+                                        <p className="text-xs text-white/70 italic leading-relaxed">"{treatment.description}"</p>
+                                    </div>
+                                    <button onClick={() => setIsBookingOpen(true)} className="w-full bg-white text-[#EE8866] py-5 rounded-2xl font-bold text-xl hover:bg-gray-50 transition-all shadow-lg">Reservar ahora</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* AI REPORT SECTION - MATCHING USER DESIGN */}
+                    <div className="bg-[#FFFDF5] border border-[#FEF3C7] p-8 md:p-10 rounded-[2rem] relative">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="w-12 h-12 bg-[#FDE68A] rounded-full flex items-center justify-center shrink-0">
+                                <span className="font-serif font-black text-[#B45309] text-2xl">A</span>
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-[#92400E] uppercase tracking-widest text-xs mb-1">INFORME PERSONALIZADO DEL ESPECIALISTA</h4>
+                                <p className="text-[10px] text-[#D97706] font-medium">Análisis clínico generado por IA Médica pelviU</p>
+                            </div>
+                        </div>
+                        <div className="prose prose-amber max-w-none mb-10">
+                            <p className="text-[#78350F] leading-7 text-lg font-medium italic">
+                                {expertAnalysis}
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button onClick={handleDownloadPDF} className="flex items-center justify-center gap-2 py-4 px-6 bg-white border-2 border-[#E5E7EB] rounded-2xl text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                {isGeneratingPdf ? 'Generando PDF...' : 'Descargar Informe Completo (PDF)'}
+                            </button>
+                            <button onClick={() => setIsBookingOpen(true)} className="flex items-center justify-center gap-2 py-4 px-6 bg-[#D97706] text-white rounded-2xl font-bold text-sm hover:bg-[#B45309] transition-colors shadow-lg shadow-orange-900/10">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                                Solicitar Cita con Especialista
+                            </button>
+                        </div>
+                    </div>
+
+                    <BookingModal isOpen={isBookingOpen} onClose={() => setIsBookingOpen(false)} treatment={result.treatment} assessmentId={assessmentId} initialContact={initialContact} />
+                </motion.div>
+            );
+        };
+
+
+        const AdminDashboard = ({ onExit }) => {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [pin, setPin] = useState('');
+            const [stats, setStats] = useState(null);
+            const [filter, setFilter] = useState('all'); // all, 30d, 7d
+
+            useEffect(() => {
+                if (isAuthenticated) {
+                    refetchData();
+                }
+            }, [isAuthenticated, filter]);
+
+            const refetchData = () => {
+                let data = DB.getAll();
+
+                // Date Filter Logic
+                if (filter !== 'all') {
+                    const now = new Date();
+                    const days = filter === '30d' ? 30 : 7;
+                    const cutoff = new Date(now.setDate(now.getDate() - days));
+                    data = data.filter(d => new Date(d.timestamp) >= cutoff);
+                }
+
+                setStats(analyzeData(data));
+            };
+
+            const handleClearData = () => {
+                if (confirm('⚠️ PELIGRO: ¿Estás seguro de BORRAR TODOS los datos?\n\nEsta acción no se puede deshacer.')) {
+                    DB.clear();
+                    refetchData();
+                    alert('Datos borrados correctamente.');
+                }
+            };
+
+            const analyzeData = (data) => {
+                const total = data.length;
+                const leads = data.filter(d => d.contact?.name).length;
+                const conversion = total > 0 ? ((leads / total) * 100).toFixed(1) : 0;
+
+                const byGender = { mujer: 0, hombre: 0 };
+                const byTreatment = {};
+                const genderTreatment = {
+                    mujer: {},
+                    hombre: {} // { 'Level 1': count, ... }
+                };
+
+                // Symptom Tracking (Frequency of high severity answers)
+                const symptoms = { mujer: {}, hombre: {} };
+
+                // Age Tracking
+                let ageSumWomen = 0, ageCountWomen = 0;
+                let ageSumMen = 0, ageCountMen = 0;
+
+                data.forEach(r => {
+                    // Gender Split
+                    byGender[r.gender] = (byGender[r.gender] || 0) + 1;
+
+                    // Treatment Split
+                    byTreatment[r.treatment] = (byTreatment[r.treatment] || 0) + 1;
+
+                    // Gender x Treatment
+                    if (!genderTreatment[r.gender][r.treatment]) genderTreatment[r.gender][r.treatment] = 0;
+                    genderTreatment[r.gender][r.treatment]++;
+
+                    // Symptom Analysis (Simplified check for max scores in specific questions)
+                    // We look at raw answers. If score >= 20 (typically severe), we tag it.
+                    Object.entries(r.answers).forEach(([qId, score]) => {
+                        if (score >= 20) {
+                            // Map ID to readable name if possible, or use ID
+                            const qName = getQuestionLabel(qId, r.gender);
+                            if (!symptoms[r.gender][qName]) symptoms[r.gender][qName] = 0;
+                            symptoms[r.gender][qName]++;
+                        }
+                    });
+
+                    // Age Analysis
+                    const age = parseInt(r.contact?.age);
+                    if (!isNaN(age) && age > 0) {
+                        if (r.gender === 'mujer') {
+                            ageSumWomen += age;
+                            ageCountWomen++;
+                        } else if (r.gender === 'hombre') {
+                            ageSumMen += age;
+                            ageCountMen++;
+                        }
+                    }
+                });
+
+                const avgAgeWomen = ageCountWomen > 0 ? Math.round(ageSumWomen / ageCountWomen) : '-';
+                const avgAgeMen = ageCountMen > 0 ? Math.round(ageSumMen / ageCountMen) : '-';
+
+                return { total, leads, conversion, byGender, byTreatment, genderTreatment, symptoms, avgAgeWomen, avgAgeMen };
+            };
+
+            // Helper to get short label for question
+            const getQuestionLabel = (id, gender) => {
+                const map = {
+                    '1': 'Frecuencia Urinaria',
+                    '2': 'Cantidad Pérdida',
+                    '3': 'Sensación Bulto', // Woman
+                    '4': 'Esfuerzo (Tos/Risa)', // Woman
+                    '5': 'Satisfacción Sexual', // Woman
+                    '103': 'Goteo Post-Miccional', // Man
+                    '104': 'Pérdida Post-Cirugía', // Man
+                    '105': 'Firmeza Erección', // Man
+                };
+                return map[id] || `Pregunta ${id}`;
+            };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (pin === '1234') setIsAuthenticated(true);
+                else alert('PIN Incorrecto');
+            };
+
+            if (!isAuthenticated) return (
+                <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl w-full max-w-sm text-center space-y-6">
+                        <h2 className="text-2xl font-bold text-gray-800">Acceso Profesional</h2>
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <input
+                                type="password"
+                                value={pin}
+                                onChange={e => setPin(e.target.value)}
+                                placeholder="PIN de Acceso"
+                                className="w-full text-center text-2xl tracking-widest py-3 border-b-2 border-gray-200 outline-none focus:border-[#EE8866]"
+                                autoFocus
+                            />
+                            <button type="submit" className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold">Entrar</button>
+                        </form>
+                        <button onClick={onExit} className="text-sm text-gray-400 hover:text-gray-600 underline">Volver a la App</button>
+                    </div>
+                </div>
+            );
+
+            if (!stats) return <div>Cargando...</div>;
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-20">
+                    <div className="bg-gray-900 text-white p-6 sticky top-0 z-50 shadow-lg">
+                        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-4">
+                                <h1 className="text-xl font-bold">pelviU <span className="text-[#EE8866] font-normal">| Panel de Control</span></h1>
+                                <button onClick={handleClearData} className="text-xs bg-red-500/20 text-red-300 px-3 py-1 rounded hover:bg-red-500 hover:text-white transition-colors">Resetear Todo</button>
+                            </div>
+
+                            <div className="flex bg-gray-800 rounded-lg p-1">
+                                <button onClick={() => setFilter('all')} className={`px-4 py-1 text-sm rounded ${filter === 'all' ? 'bg-[#EE8866] text-white' : 'text-gray-400 hover:text-white'}`}>Todo</button>
+                                <button onClick={() => setFilter('30d')} className={`px-4 py-1 text-sm rounded ${filter === '30d' ? 'bg-[#EE8866] text-white' : 'text-gray-400 hover:text-white'}`}>30 días</button>
+                                <button onClick={() => setFilter('7d')} className={`px-4 py-1 text-sm rounded ${filter === '7d' ? 'bg-[#EE8866] text-white' : 'text-gray-400 hover:text-white'}`}>7 días</button>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button onClick={DB.exportCSV} className="text-sm bg-[#EE8866] hover:bg-[#d67657] px-4 py-2 rounded-lg font-bold transition-colors">Descargar CSV</button>
+                                <button onClick={onExit} className="text-sm text-gray-400 hover:text-white">Salir</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
+                        {/* KPI Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <KpiCard label="Tests Totales" value={stats.total} icon="📝" />
+                            <KpiCard label="Leads Captados" value={stats.leads} icon="👤" highlight />
+                            <KpiCard label="Edad Media (M)" value={`${stats.avgAgeWomen}`} icon="👩" sub="Mujeres" />
+                            <KpiCard label="Edad Media (H)" value={`${stats.avgAgeMen}`} icon="👨" sub="Hombres" />
+                        </div>
+
+
+                        {/* AI ANALYSIS SECTION */}
+                        <div className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl">
+                            <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl">🧠</div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center animate-pulse">
+                                        <span className="text-xl">✨</span>
+                                    </div>
+                                    <h3 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-200 to-white">Análisis de Mercado & Consumidor (IA)</h3>
+                                </div>
+
+                                <div className="grid md:grid-cols-3 gap-8">
+                                    {/* Avatar */}
+                                    <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+                                        <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-3">Avatar Detectado</p>
+                                        <p className="text-lg font-medium leading-relaxed">
+                                            {(() => {
+                                                const w = stats.byGender.mujer || 0;
+                                                const m = stats.byGender.hombre || 0;
+                                                const total = w + m;
+                                                if (total === 0) return "Esperando datos...";
+                                                const wPct = (w / total) * 100;
+                                                if (wPct > 65) return "Mujer activa, consciente de su salud pélvica, buscando prevención o recuperación post-parto.";
+                                                if (wPct < 35) return "Hombre preocupado por salud funcional, post-quirúrgica o rendimiento sexual.";
+                                                return "Perfil Mixto: Hombres y Mujeres con interés compartido en salud pélvica preventiva y correctiva.";
+                                            })()}
+                                        </p>
+                                    </div>
+
+                                    {/* Pain Points */}
+                                    <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+                                        <p className="text-xs font-bold uppercase tracking-widest text-rose-300 mb-3">Dolores Principales (Pain Points)</p>
+                                        <ul className="space-y-2">
+                                            {(() => {
+                                                const allSymptoms = { ...stats.symptoms.mujer, ...stats.symptoms.hombre };
+                                                const sorted = Object.entries(allSymptoms).sort(([, a], [, b]) => b - a).slice(0, 3);
+                                                if (sorted.length === 0) return <li className="text-white/50 italic">Sin suficientes datos de síntomas severos.</li>;
+                                                return sorted.map(([name, count]) => (
+                                                    <li key={name} className="flex items-center gap-2">
+                                                        <span className="text-rose-400">⚠️</span>
+                                                        <span>{name}</span>
+                                                        <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-white/60">{count} casos</span>
+                                                    </li>
+                                                ));
+                                            })()}
+                                        </ul>
+                                    </div>
+
+                                    {/* Marketing Strategy */}
+                                    <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+                                        <p className="text-xs font-bold uppercase tracking-widest text-emerald-300 mb-3">Estrategia de Mensaje</p>
+                                        <p className="text-sm leading-relaxed text-white/80">
+                                            {(() => {
+                                                const level3 = (stats.byTreatment['Nivel 3 (Complejo)'] || 0) + (stats.byTreatment['Nivel 2 (Moderado)'] || 0);
+                                                const prev = (stats.byTreatment['Plan Prevención'] || 0) + (stats.byTreatment['Nivel 1 (Leve)'] || 0);
+                                                if (level3 > prev) return "💡 Enfoque CLÍNICO: Tu audiencia sufre patologías avanzadas. Usa palabras como 'Recuperación', 'Solución Médica', 'Sin Cirugía'. Muestra testimonios de casos de éxito severos.";
+                                                return "💡 Enfoque LIFESTYLE: Tu audiencia busca mejora y prevención. Usa palabras como 'Potencia', 'Control', 'Bienestar', 'Intimidad'. Vende la transformación positiva y el biohacking pélvico.";
+                                            })()}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-8">
+
+                            {/* Gender Distribution */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="font-bold text-gray-800 mb-6">Distribución por Género</h3>
+                                <div className="space-y-4">
+                                    <BarMetric label="Mujeres" value={stats.byGender.mujer} total={stats.total} color="bg-rose-400" />
+                                    <BarMetric label="Hombres" value={stats.byGender.hombre} total={stats.total} color="bg-blue-500" />
+                                </div>
+                            </div>
+
+                            {/* Global Treatment Distribution */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="font-bold text-gray-800 mb-6">Tratamientos Recomendados (Global)</h3>
+                                <div className="space-y-4">
+                                    {Object.entries(stats.byTreatment).map(([name, count]) => (
+                                        <BarMetric key={name} label={name} value={count} total={stats.total} color="bg-[#EE8866]" />
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Advanced Split: Program by Gender */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold text-gray-800 mb-6">Programas por Sexo</h3>
+                            <div className="grid md:grid-cols-2 gap-12">
+                                <div>
+                                    <h4 className="text-sm font-bold text-rose-400 uppercase tracking-widest mb-4">Mujeres</h4>
+                                    <div className="space-y-3">
+                                        {Object.entries(stats.genderTreatment.mujer).length === 0 && <p className="text-sm text-gray-400 italic">Sin datos</p>}
+                                        {Object.entries(stats.genderTreatment.mujer).map(([t, c]) => (
+                                            <BarMetric key={t} label={t} value={c} total={stats.byGender.mujer} color="bg-rose-400" />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-blue-500 uppercase tracking-widest mb-4">Hombres</h4>
+                                    <div className="space-y-3">
+                                        {Object.entries(stats.genderTreatment.hombre).length === 0 && <p className="text-sm text-gray-400 italic">Sin datos</p>}
+                                        {Object.entries(stats.genderTreatment.hombre).map(([t, c]) => (
+                                            <BarMetric key={t} label={t} value={c} total={stats.byGender.hombre} color="bg-blue-500" />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Symptom Heatmap */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold text-gray-800 mb-6">Síntomas Críticos (+Frecuentes)</h3>
+                            <div className="grid md:grid-cols-2 gap-12">
+                                <div>
+                                    <h4 className="text-sm font-bold text-rose-400 uppercase tracking-widest mb-4">Mujeres (&gt;20 pts)</h4>
+                                    <div className="space-y-3">
+                                        {Object.entries(stats.symptoms.mujer).length === 0 && <p className="text-sm text-gray-400 italic">Sin síntomas severos registrados</p>}
+                                        {Object.entries(stats.symptoms.mujer)
+                                            .sort(([, a], [, b]) => b - a)
+                                            .map(([s, c]) => (
+                                                <BarMetric key={s} label={s} value={c} total={stats.byGender.mujer} color="bg-rose-300" />
+                                            ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-blue-500 uppercase tracking-widest mb-4">Hombres (&gt;20 pts)</h4>
+                                    <div className="space-y-3">
+                                        {Object.entries(stats.symptoms.hombre).length === 0 && <p className="text-sm text-gray-400 italic">Sin síntomas severos registrados</p>}
+                                        {Object.entries(stats.symptoms.hombre)
+                                            .sort(([, a], [, b]) => b - a)
+                                            .map(([s, c]) => (
+                                                <BarMetric key={s} label={s} value={c} total={stats.byGender.hombre} color="bg-blue-400" />
+                                            ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const KpiCard = ({ label, value, icon, highlight, sub }) => (
+            <div className={`p-6 rounded-2xl border ${highlight ? 'bg-orange-50 border-[#EE8866]' : 'bg-white border-gray-100'} shadow-sm`}>
+                <div className="text-2xl mb-2">{icon}</div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{label}</p>
+                <p className={`text-3xl font-black ${highlight ? 'text-[#EE8866]' : 'text-gray-800'}`}>{value}</p>
+                {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+            </div>
+        );
+
+        const BarMetric = ({ label, value, total, color }) => {
+            const pct = total > 0 ? ((value / total) * 100).toFixed(0) : 0;
+            return (
+                <div>
+                    <div className="flex justify-between text-sm mb-1">
+                        <span className="font-medium text-gray-700">{label}</span>
+                        <span className="font-bold text-gray-900">{value} ({pct}%)</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${color}`} style={{ width: `${pct}%` }}></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const howItWorksVariants = {
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { duration: 0.5 } }
+        };
+
+        const HowItWorks = ({ onStart }) => {
+            const [gender, setGender] = useState('mujer');
+            const benefits = BENEFITS_DATA[gender];
+
+            return (
+                <motion.div variants={howItWorksVariants} initial="hidden" animate="visible" exit="hidden" className="pt-20 pb-24">
+
+                    {/* Hero / Header Section */}
+                    <div className="max-w-4xl mx-auto px-6 text-center space-y-6 mb-16">
+                        <h2 className="text-4xl md:text-5xl font-black text-gray-900">Ciencia y Tecnología a tu Servicio</h2>
+                        <p className="text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">
+                            Selecciona tu perfil para descubrir cómo pelviU transforma tu salud mediante un método indoloro y altamente eficaz.
+                        </p>
+
+                        <div className="flex flex-col sm:flex-row justify-center gap-6 mt-10 max-w-2xl mx-auto">
+                            <button
+                                onClick={() => setGender('mujer')}
+                                className={`flex-1 py-6 rounded-2xl border-2 transition-all font-bold text-xl flex items-center justify-center gap-3 ${gender === 'mujer' ? 'border-[#EE8866] bg-orange-50 text-[#EE8866] shadow-[0_0_0_4px_rgba(238,136,102,0.1)]' : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'}`}
+                            >
+                                <span className="text-2xl">♀</span> Soy Mujer
+                            </button>
+                            <button
+                                onClick={() => setGender('hombre')}
+                                className={`flex-1 py-6 rounded-2xl border-2 transition-all font-bold text-xl flex items-center justify-center gap-3 ${gender === 'hombre' ? 'border-gray-900 bg-gray-50 text-gray-900 shadow-[0_0_0_4px_rgba(17,24,39,0.1)]' : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'}`}
+                            >
+                                <span className="text-2xl">♂</span> Soy Hombre
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Scientific Evidence Section */}
+                    <div className="max-w-6xl mx-auto px-6 mb-24">
+                        <div className="flex items-center gap-4 mb-8">
+                            <div className="w-1 h-8 bg-[#EE8866]"></div>
+                            <h3 className="text-2xl font-black text-gray-900">Evidencia Científica y Beneficios</h3>
+                        </div>
+
+                        <p className="text-lg text-gray-600 mb-12 max-w-3xl leading-relaxed">
+                            Nuestra metodología utiliza tecnología <span className="font-bold text-gray-900">HIFEM</span> (High-Intensity Focused Electromagnetic) para generar contracciones musculares supra-máximas, imposibles de replicar con ejercicios convencionales como los de Kegel.
+                        </p>
+
+                        <div className="grid md:grid-cols-2 gap-6">
+                            {benefits.map((benefit, idx) => (
+                                <BenefitCard key={idx} {...benefit} />
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Dark Section: How is a session */}
+                    <div className="bg-[#111827] text-white py-24 rounded-[3rem] mx-4 md:mx-6 overflow-hidden relative">
+                        {/* Background glow effect */}
+                        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#EE8866] opacity-10 blur-[100px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2"></div>
+
+                        <div className="max-w-5xl mx-auto px-6 relative z-10">
+                            <div className="flex flex-col items-center text-center space-y-4 mb-16">
+                                <span className="w-1 h-12 bg-[#EE8866] block"></span>
+                                <h3 className="text-3xl md:text-4xl font-black">¿Cómo es una sesión en pelviU?</h3>
+                            </div>
+
+                            {/* Features Row */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-20">
+                                {[
+                                    { icon: "✨", label: "Fácil", sub: "SIN ESFUERZO" },
+                                    { icon: "🛡️", label: "No invasivo", sub: "SIN SONDAS" },
+                                    { icon: "👔", label: "Vestido", sub: "TOTAL DISCRECIÓN" },
+                                    { icon: "⏱️", label: "25 Minutos", sub: "SESIÓN RÁPIDA" },
+                                ].map((item, i) => (
+                                    <div key={i} className="bg-white/5 border border-white/10 p-6 rounded-3xl text-center backdrop-blur-sm group hover:bg-white/10 transition-colors">
+                                        <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">{item.icon}</div>
+                                        <div className="font-bold text-lg">{item.label}</div>
+                                        <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{item.sub}</div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Steps */}
+                            <div className="space-y-12">
+                                <div className="flex gap-6 items-start">
+                                    <div className="w-12 h-12 rounded-full bg-[#EE8866] flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-lg shadow-[#EE8866]/30">1</div>
+                                    <p className="text-lg md:text-xl text-gray-300 leading-relaxed pt-2">
+                                        <span className="text-white font-bold">Solo tienes que sentarte</span> cómodamente en nuestro dispositivo médico. Sin quitarte la ropa, sin geles ni procedimientos incómodos.
+                                    </p>
+                                </div>
+                                <div className="flex gap-6 items-start">
+                                    <div className="w-12 h-12 rounded-full bg-[#EE8866] flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-lg shadow-[#EE8866]/30">2</div>
+                                    <p className="text-lg md:text-xl text-gray-300 leading-relaxed pt-2">
+                                        Realizarás el <span className="text-[#EE8866] font-bold">número de sesiones</span> que tu programa de mejora determine tras la evaluación clínica para alcanzar el tono muscular óptimo.
+                                    </p>
+                                </div>
+                                <div className="flex gap-6 items-start">
+                                    <div className="w-12 h-12 rounded-full bg-[#EE8866] flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-lg shadow-[#EE8866]/30">3</div>
+                                    <p className="text-lg md:text-xl text-gray-300 leading-relaxed pt-2">
+                                        Tras finalizar, recomendamos un <span className="text-[#EE8866] font-bold">seguimiento mensual</span>. Como cualquier entrenamiento neuromuscular, el mantenimiento garantiza resultados para toda la vida.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Final CTA */}
+                    <div className="max-w-4xl mx-auto px-6 mt-20">
+                        <div className="bg-[#FFF8F6] border border-[#ffede8] rounded-[3rem] p-12 text-center shadow-sm">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">INICIA TU CAMINO HACIA LA RECUPERACIÓN</p>
+                            <button
+                                onClick={onStart}
+                                className="w-full md:w-auto px-10 py-5 bg-[#EE8866] text-white rounded-2xl font-bold text-xl shadow-xl shadow-[#EE8866]/20 hover:scale-105 transition-transform"
+                            >
+                                Hacer mi evaluación personalizada ahora
+                            </button>
+                        </div>
+                    </div>
+
+                </motion.div>
+            );
+        };
+
+        const App = () => {
+            const [step, setStep] = useState('welcome');
+            const [results, setResults] = useState(null);
+            const [currentAssessmentId, setCurrentAssessmentId] = useState(null);
+            const [tempQuizData, setTempQuizData] = useState(null);
+            const [currentContact, setCurrentContact] = useState(null);
+
+            const startQuiz = () => setStep('quiz');
+
+            // Step 1: Quiz Complete -> Go to Lead Capture
+            const handleComplete = (answers, gender) => {
+                setTempQuizData({ answers, gender });
+                setStep('lead-capture');
+            };
+
+            // Step 2: Lead Captured -> Calculate, Save, Sync -> Results
+            const handleLeadCapture = (contactData) => {
+                setStep('calculating');
+                setCurrentContact(contactData);
+                setTimeout(() => {
+                    const { answers, gender } = tempQuizData;
+                    const result = calculateResult(answers, gender);
+                    setResults(result);
+
+                    // Create & Personalize ID
+                    const newId = DB.createAssessment(gender, answers, result, contactData);
+                    setCurrentAssessmentId(newId);
+
+                    // CLOUDY SYNC (Auto-send to Sheets)
+                    // Use 'no-cors' mode to avoid CORS errors. Response is opaque.
+                    fetch('https://script.google.com/macros/s/AKfycbzz40ckyL13vI6H7nZog0X1hZkl3o5BBvXBZ8-WlMYcyzFUVHzG_qTy2O_Jt_QOVzD4/exec', {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: contactData.name,
+                            email: contactData.email,
+                            phone: contactData.phone,
+                            age: contactData.age,
+                            gender: gender,
+                            assessmentId: newId,
+                            treatment: result.treatment.name
+                        })
+                    }).catch(err => console.error("Sync Error", err));
+
+                    setStep('results');
+                }, 1500);
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {step !== 'admin' && <Header onGoHome={() => setStep('welcome')} onOpenHowItWorks={() => setStep('how-it-works')} />}
+                    <main className="flex-grow pt-16">
+                        {step === 'admin' ? (
+                            <AdminDashboard onExit={() => setStep('welcome')} />
+                        ) : (
+                            <AnimatePresence mode="wait">
+                                {step === 'welcome' && (
+                                    <motion.div key="w" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="min-h-[85vh] flex flex-col justify-center items-center px-6 text-center max-w-4xl mx-auto space-y-8">
+                                        <h1 className="text-5xl md:text-7xl font-extrabold">Recupera el <span className="text-[#EE8866]">control</span> de tu suelo pélvico.</h1>
+                                        <p className="text-xl text-gray-500 max-w-2xl">Test basado en el estándar ICIQ-UI con protocolo HIFEM personalizado.</p>
+                                        <button onClick={startQuiz} className="bg-[#EE8866] text-white px-10 py-5 rounded-2xl font-bold text-lg shadow-xl shadow-[#EE8866]/20">Empezar Evaluación Gratuita</button>
+                                    </motion.div>
+                                )}
+                                {step === 'how-it-works' && (
+                                    <HowItWorks key="h" onStart={startQuiz} />
+                                )}
+                                {step === 'quiz' && <Assessment onComplete={handleComplete} />}
+                                {step === 'lead-capture' && <LeadCapture onCapture={handleLeadCapture} />}
+                                {step === 'calculating' && (
+                                    <div className="min-h-[70vh] flex flex-col justify-center items-center">
+                                        <div className="w-12 h-12 border-4 border-t-[#EE8866] rounded-full animate-spin mb-4" />
+                                        <h2 className="text-2xl font-bold">Analizando...</h2>
+                                    </div>
+                                )}
+                                {step === 'results' && results && <Results result={results} assessmentId={currentAssessmentId} onRestart={() => setStep('welcome')} initialContact={currentContact} />}
+                            </AnimatePresence>
+                        )}
+                    </main>
+                    {step !== 'admin' && (
+                        <footer className="py-8 text-center text-gray-400 text-sm border-t flex flex-col items-center gap-2">
+                            <span>© 2025 pelviU Clinic</span>
+                            <button onClick={() => setStep('admin')} className="text-xs text-gray-300 hover:text-[#EE8866] underline">Acceso Profesional</button>
+                        </footer>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
